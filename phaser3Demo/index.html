@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Making your first Phaser 3 Game - Part 1</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.11.0/dist/phaser.js"></script>
+    <style type="text/css">
+        body {
+            margin: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <script type="text/javascript">
+
+        var config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 300 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        let game = new Phaser.Game(config);
+        let platforms;
+        let score = 0;
+        let scoreText;
+        let gameOver = false;
+        let gameOverText;
+
+        function preload() {
+            this.load.image('sky', 'assets/sky.png');
+            this.load.image('ground', 'assets/platform.png');
+            this.load.image('star', 'assets/star.png');
+            this.load.image('bomb', 'assets/bomb.png');
+            this.load.spritesheet('dude',
+                'assets/dude.png',
+                { frameWidth: 32, frameHeight: 48 }
+            );
+            this.load.audio('theme', 'assets/Komiku_-_04_-_Skate.mp3');
+            this.load.audio('jump', 'assets/jump.mp3');
+            this.load.audio('gameover', 'assets/dead.mp3');
+            this.load.audio('ding', 'assets/ding.mp3');
+        }
+
+        function create() {
+            this.music = this.sound.add('theme');
+            this.jump = this.sound.add('jump');
+            this.gameOverSound = this.sound.add('gameover');
+            this.ding = this.sound.add('ding');
+            this.music.setLoop(true);
+            this.music.setVolume(0.5);
+            initIO(this);
+            makeWorld(this);
+            makePlayer(this);
+            makeStars(this, 11);
+            initPhysics(this);
+            scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000' });
+            gameOverText = this.add.text(220, 300, 'GAME OVER!', { fontSize: '64px', fill: '#F00' });
+            gameOverText.setVisible(false);
+            musicPlayer(this.music, true);
+
+        }
+
+        function initPhysics(global) {
+            global.physics.add.collider(player, platforms);
+            global.physics.add.collider(stars, platforms);
+            global.physics.add.overlap(player, stars, collectStar, null, global);
+
+            bombs = global.physics.add.group();
+
+            global.physics.add.collider(bombs, platforms);
+
+            global.physics.add.collider(player, bombs, hitBomb, null, global);
+        }
+
+        function gameOverMan(global) {
+            
+            global.physics.pause();
+
+            player.setVisible(false);
+
+            player.setTint(0xff0000);
+
+            player.anims.play('turn');
+
+
+            gameOverText.setVisible(true);
+            
+
+            musicPlayer(global.music, false);
+            
+            scoreText.setText('');
+            if (bombs.countActive(true) >= 1) {
+                bombs.children.iterate(function (child) {
+
+                    child.disableBody(true, child.x, 0, true, true);
+
+                });
+            }
+            if (stars.countActive(true) >= 0) {
+                stars.children.iterate(function (child) {
+
+                    child.disableBody(true, child.x, 0, true, true);
+
+                });
+            }
+        }
+
+        function musicPlayer(music, trigger) {
+
+            if (trigger) {
+                music.play();
+            }
+            else {
+                music.stop();
+            }
+
+        }
+
+        function hitBomb(player, bomb) {
+            gameOver = true;
+            this.gameOverSound.play();
+        }
+
+        function initIO(global) {
+            cursors = global.input.keyboard.createCursorKeys();
+            cursors = { ...cursors, ...global.input.keyboard.addKeys('B,S') };
+        }
+
+        function collectStar(player, star) {
+            this.ding.play();
+            star.disableBody(true, true);
+            score += 10;
+            scoreText.setText('Score: ' + score);
+
+            if (stars.countActive(true) === 0) {
+                stars.children.iterate(function (child) {
+
+                    child.enableBody(true, child.x, 0, true, true);
+
+                });
+
+                makeBomb(5);
+
+            }
+        }
+
+        function makeWorld(global) {
+            //Background Objects
+            global.add.image(400, 300, 'sky');
+
+            //World
+            platforms = global.physics.add.staticGroup();
+
+            platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+            platforms.create(600, 400, 'ground');
+            platforms.create(50, 250, 'ground');
+            platforms.create(750, 220, 'ground');
+        }
+
+        function getRandomInt(min, max) {
+            min = Math.ceil(min);
+            max = Math.floor(max);
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function makePlayer(global) {
+            player = global.physics.add.sprite(100, 450, 'dude');
+
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+
+            global.anims.create({
+                key: 'left',
+                frames: global.anims.generateFrameNumbers('dude', { start: 0, end: 3 }),
+                frameRate: 10,
+                repeat: -1
+            });
+
+            global.anims.create({
+                key: 'turn',
+                frames: [{ key: 'dude', frame: 4 }],
+                frameRate: 20
+            });
+
+            global.anims.create({
+                key: 'right',
+                frames: global.anims.generateFrameNumbers('dude', { start: 5, end: 8 }),
+                frameRate: 10,
+                repeat: -1
+            });
+        }
+
+        function makeStars(global, count) {
+            //Stars
+            stars = global.physics.add.group({
+                key: 'star',
+                repeat: count,
+                setXY: { x: 12, y: 0, stepX: 70 }
+            });
+
+            stars.children.iterate(function (child) {
+
+                child.setBounceY(Phaser.Math.FloatBetween(0.1, 0.2));
+
+            });
+        }
+
+        function makeBomb(count) {
+            for (let i = 0; i < count; i++) {
+                var x = (player.x < 400) ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);
+                var bomb = bombs.create(x, 16, 'bomb');
+                bomb.setBounce(1);
+                bomb.setCollideWorldBounds(true);
+                bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+                bomb.allowGravity = false;
+            }
+        }
+
+        function update() {
+            if (gameOver) {
+                gameOverMan(this);
+            }
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+
+                player.anims.play('left', true);
+            }
+            else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+
+                player.anims.play('right', true);
+            }
+            else {
+                player.setVelocityX(0);
+
+                player.anims.play('turn');
+            }
+
+            if (cursors.up.isDown && player.body.touching.down) {
+                player.setVelocityY(-400);
+                this.jump.play();
+            }
+
+            if (cursors.B.isDown) {
+                makeBomb(5);
+            }
+
+            if (gameOver) {
+                if (cursors.space.isDown) {
+                    this.gameOverSound.stop();
+                    this.physics.resume();
+
+                    player.setTint(0xffffff);
+
+                    player.anims.play('turn');
+                    player.setVisible(true);
+                    player.setPosition(100, 450, null, null);
+
+                    gameOverText.setVisible(false);
+                    score = 0;
+                    scoreText.setText('Score: ' + score);
+                    gameOver = false;
+                    musicPlayer(this.music, true);
+                    if (stars.countActive(true) >= 0) {
+                        stars.children.iterate(function (child) {
+
+                            child.enableBody(true, child.x, 0, true, true);
+
+                        });
+                    }
+                }
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>
